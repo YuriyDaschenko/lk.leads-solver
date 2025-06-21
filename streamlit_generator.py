@@ -10,6 +10,7 @@ TEMPLATE_DIR = "templates"
 OUTPUT_DIR = "output"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+
 # === ИНИЦИАЛИЗАЦИЯ СЕССИИ ===
 if 'page' not in st.session_state:
     st.session_state['page'] = 'main_menu'
@@ -25,14 +26,11 @@ if st.session_state['page'] == 'main_menu':
     with col1:
         if st.button("📄 Подготовить документы клиенту"):
             st.session_state['page'] = 'select_parameters'
-            st.experimental_rerun()
 
     with col2:
         if st.button("📋 Реестр неоплаченных счетов"):
             st.session_state['page'] = 'unpaid_registry'
-            st.experimental_rerun()
 
-# === ЭКРАН ВЫБОРА ПАРАМЕТРОВ ДОКУМЕНТА ===
 elif st.session_state['page'] == 'select_parameters':
     st.title("📄 Подготовка документов клиенту")
 
@@ -54,13 +52,10 @@ elif st.session_state['page'] == 'select_parameters':
         if submitted:
             st.session_state['combo'] = (our_company, payer_type, service_type, doc_type)
             st.session_state['page'] = 'fill_fields_placeholder'
-            st.experimental_rerun()
 
     if st.button("🔙 Назад в меню"):
         st.session_state['page'] = 'main_menu'
-        st.experimental_rerun()
 
-# === ЭКРАН ЗАПОЛНЕНИЯ ПОЛЕЙ ===
 elif st.session_state['page'] == 'fill_fields_placeholder':
     import re
     from docx import Document
@@ -70,6 +65,8 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
     from googleapiclient.http import MediaFileUpload
     from num2words import num2words
     import gspread
+    import json
+    from google.oauth2.service_account import Credentials
 
     def extract_ordered_variables_from_docx(doc_path):
         doc = Document(doc_path)
@@ -111,110 +108,107 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
     if not selected_entry:
         st.error("❌ Не найдена запись в template_map.json под выбранную комбинацию.")
     else:
-        st.title("📝 Заполнение данных по шаблону")
-        ordered_vars = []
-        seen_vars = set()
+        # Только рендерим форму, если мы на этой странице
+        if st.session_state['page'] == 'fill_fields_placeholder':
+            st.title("📝 Заполнение данных по шаблону")
+            ordered_vars = []
+            seen_vars = set()
 
-        for template_file in selected_entry['template_paths']:
-            path = os.path.join(TEMPLATE_DIR, template_file)
-            if not os.path.exists(path):
-                st.warning(f"⚠️ Файл не найден: {template_file}")
-            else:
-                vars_from_template = extract_ordered_variables_from_docx(path)
-                for var in vars_from_template:
-                    if var not in seen_vars and not var.endswith("_words"):
-                        seen_vars.add(var)
-                        ordered_vars.append(var)
+            for template_file in selected_entry['template_paths']:
+                path = os.path.join(TEMPLATE_DIR, template_file)
+                if not os.path.exists(path):
+                    st.warning(f"⚠️ Файл не найден: {template_file}")
+                else:
+                    vars_from_template = extract_ordered_variables_from_docx(path)
+                    for var in vars_from_template:
+                        if var not in seen_vars and not var.endswith("_words"):
+                            seen_vars.add(var)
+                            ordered_vars.append(var)
 
-        input_values = {}
+            input_values = {}
 
-        with st.form("fill_form"):
-            st.write(f"📄 Шаблоны: {', '.join(selected_entry['template_paths'])}")
-            for var in ordered_vars:
-                label = field_labels.get(var, f"{{{{{var}}}}}")
-                value = st.text_input(label, value=st.session_state['form_data'].get(var, ""))
-                input_values[var] = value
+            with st.form("fill_form"):
+                st.write(f"📄 Шаблоны: {', '.join(selected_entry['template_paths'])}")
+                for var in ordered_vars:
+                    label = field_labels.get(var, f"{{{{{var}}}}}")
+                    value = st.text_input(label, value=st.session_state['form_data'].get(var, ""))
+                    input_values[var] = value
 
-            st.subheader("📎 Дополнительно для учёта")
-            input_values["deal_link"] = st.text_input("🔗 Ссылка на сделку из Битрикс", value=st.session_state['form_data'].get("deal_link", ""))
-            input_values["deal_type"] = st.selectbox("📌 Тип сделки", ["Новый", "Пролонгация"])
-            input_values["responsible"] = st.selectbox("👤 Ответственный", responsible_names)
+                st.subheader("📎 Дополнительно для учёта")
+                input_values["deal_link"] = st.text_input("🔗 Ссылка на сделку из Битрикс", value=st.session_state['form_data'].get("deal_link", ""))
+                input_values["deal_type"] = st.selectbox("📌 Тип сделки", ["Новый", "Пролонгация"])
+                input_values["responsible"] = st.selectbox("👤 Ответственный", responsible_names)
 
-            submitted = st.form_submit_button("➡️ Скачать готовые документы")
-            if submitted:
-                st.session_state['form_data'] = input_values
-                st.success("✅ Данные сохранены.")
+                submitted = st.form_submit_button("➡️ Скачать готовые документы")
+                if submitted:
+                    try:
+                        scopes = ["https://www.googleapis.com/auth/spreadsheets"]
 
-                try:
-                    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+                        secret_json = st.secrets["gcp_service_account"]["json"]
+                        service_account_info = json.loads(secret_json)
+                        service_account_info["private_key"] = service_account_info["private_key"].replace('\\n', '\n')
+                        credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
 
-                    secret_json = st.secrets["gcp_service_account"]["json"]
-                    service_account_info = json.loads(secret_json)
-                    service_account_info["***REMOVED***"] = service_account_info["***REMOVED***"].replace('\\n', '\n')
-                    credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
+                        client = gspread.authorize(credentials)
+                        sh = client.open_by_url("https://docs.google.com/spreadsheets/d/1AeW7yFTp2KIVPoDoGgouvLRNkf80pLIyz-I9gIeQKL4/edit/")
+                        worksheet = sh.worksheet("Реестр не оплаченных счетов")
 
-                    client = gspread.authorize(credentials)
-                    sh = client.open_by_url("https://docs.google.com/spreadsheets/d/1AeW7yFTp2KIVPoDoGgouvLRNkf80pLIyz-I9gIeQKL4/edit")
-                    worksheet = sh.sheet1
+                        row = [
+                            input_values.get("deal_link", ""),
+                            input_values.get("deal_type", ""),
+                            input_values.get("responsible", ""),
+                            input_values.get("total_amount", ""),
+                            input_values.get("invoice_date", ""),
+                            input_values.get("contract_number", ""),
+                            input_values.get("payer_fio", "") or input_values.get("client_short_name", "")
+                        ]
+                        worksheet.append_row(row)
 
-                    row = [
-                        input_values.get("deal_link", ""),
-                        input_values.get("deal_type", ""),
-                        input_values.get("responsible", ""),
-                        input_values.get("total_amount", ""),
-                        input_values.get("invoice_date", ""),
-                        input_values.get("contract_number", ""),
-                        input_values.get("payer_fio", "") or input_values.get("client_short_name", "")
-                    ]
-                    worksheet.append_row(row)
+                        def upload_to_gdrive(filepath, filename):
+                            drive_scopes = ["https://www.googleapis.com/auth/drive"]
+                            drive_service_account_info = service_account_info.copy()
+                            drive_credentials = Credentials.from_service_account_info(drive_service_account_info, scopes=drive_scopes)
+                            drive_service = build("drive", "v3", credentials=drive_credentials)
+                            file_metadata = {"name": filename, "parents": ["1z-b3pc71PMxjeU9tgwmIgjIKYLUYaEPM"]}
+                            media = MediaFileUpload(filepath, resumable=True)
+                            drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
-                    def upload_to_gdrive(filepath, filename):
-                        drive_scopes = ["https://www.googleapis.com/auth/drive"]
-                        drive_service_account_info = service_account_info.copy()
-                        drive_credentials = Credentials.from_service_account_info(drive_service_account_info, scopes=drive_scopes)
-                        drive_service = build("drive", "v3", credentials=drive_credentials)
-                        file_metadata = {"name": filename, "parents": ["1z-b3pc71PMxjeU9tgwmIgjIKYLUYaEPM"]}
-                        media = MediaFileUpload(filepath, resumable=True)
-                        drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+                        st.session_state['generated_files'] = []
 
-                    st.session_state['generated_files'] = []
+                        for template_file in selected_entry['template_paths']:
+                            tpl_path = os.path.join(TEMPLATE_DIR, template_file)
+                            doc = DocxTemplate(tpl_path)
+                            context = input_values.copy()
 
-                    for template_file in selected_entry['template_paths']:
-                        tpl_path = os.path.join(TEMPLATE_DIR, template_file)
-                        doc = DocxTemplate(tpl_path)
-                        context = input_values.copy()
+                            for key in list(context.keys()):
+                                if key.endswith("_numeric"):
+                                    try:
+                                        number = float(context[key])
+                                        if number.is_integer():
+                                            number = int(number)
+                                        context[key.replace("_numeric", "_words")] = num2words(number, lang='ru')
+                                    except:
+                                        context[key.replace("_numeric", "_words")] = "[ошибка]"
 
-                        for key in list(context.keys()):
-                            if key.endswith("_numeric"):
-                                try:
-                                    number = float(context[key])
-                                    if number.is_integer():
-                                        number = int(number)
-                                    context[key.replace("_numeric", "_words")] = num2words(number, lang='ru')
-                                except:
-                                    context[key.replace("_numeric", "_words")] = "[ошибка]"
+                            doc.render(context)
 
-                        doc.render(context)
+                            prefix = "СЧЁТ" if "счет" in template_file.lower() or "счёт" in template_file.lower() else "ДОГОВОР"
+                            postfix = context.get("contract_number", "без_номера")
+                            filename = f"{prefix}-{postfix}.docx"
+                            full_path = os.path.join(OUTPUT_DIR, filename)
+                            doc.save(full_path)
+                            upload_to_gdrive(full_path, filename)
+                            st.session_state['generated_files'].append((filename, full_path))
 
-                        prefix = "СЧЁТ" if "счет" in template_file.lower() or "счёт" in template_file.lower() else "ДОГОВОР"
-                        postfix = context.get("contract_number", "без_номера")
-                        filename = f"{prefix}-{postfix}.docx"
-                        full_path = os.path.join(OUTPUT_DIR, filename)
-                        doc.save(full_path)
-                        upload_to_gdrive(full_path, filename)
-                        st.session_state['generated_files'].append((filename, full_path))
+                        st.session_state['form_data'] = input_values
+                        st.session_state['page'] = 'document_download'
 
-                    st.session_state['page'] = 'document_download'
-                    st.experimental_rerun()
-
-                except Exception as e:
-                    st.error(f"⚠️ Ошибка при записи в Google Sheets: {e}")
+                    except Exception as e:
+                        st.error(f"⚠️ Ошибка при записи в Google Sheets: {e}")
 
         if st.button("🔙 Назад"):
             st.session_state['page'] = 'select_parameters'
-            st.experimental_rerun()
 
-# === Реестр неоплаченных счетов ===
 elif st.session_state['page'] == 'unpaid_registry':
     st.title("📋 Реестр неоплаченных счетов")
 
@@ -225,33 +219,39 @@ elif st.session_state['page'] == 'unpaid_registry':
         scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
         secret_json = st.secrets["gcp_service_account"]["json"]
         service_account_info = json.loads(secret_json)
-        service_account_info["***REMOVED***"] = service_account_info["***REMOVED***"].replace('\\n', '\n')
+        service_account_info["private_key"] = service_account_info["private_key"].replace('\\n', '\n')
         credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
         client = gspread.authorize(credentials)
 
-        spreadsheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1AeW7yFTp2KIVPoDoGgouvLRNkf80pLIyz-I9gIeQKL4/edit")
-        sheet = spreadsheet.sheet1
-        data = sheet.get_all_records()
-        df = pd.DataFrame(data)
+        sh = client.open_by_url("https://docs.google.com/spreadsheets/d/1AeW7yFTp2KIVPoDoGgouvLRNkf80pLIyz-I9gIeQKL4/edit/")
+        worksheet = sh.worksheet("Реестр не оплаченных счетов")
+        values = worksheet.get_all_values()
 
-        st.markdown("### 🔍 Фильтры")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            selected_resp = st.selectbox("👤 Ответственный", ["Все"] + sorted(df["Ответственный"].dropna().unique()))
-        with col2:
-            selected_type = st.selectbox("📄 Тип договора", ["Все"] + sorted(df["Тип договора"].dropna().unique()))
-
-        filtered_df = df.copy()
-        if selected_resp != "Все":
-            filtered_df = filtered_df[filtered_df["Ответственный"] == selected_resp]
-        if selected_type != "Все":
-            filtered_df = filtered_df[filtered_df["Тип договора"] == selected_type]
-
-        if filtered_df.empty:
-            st.info("Нет подходящих записей.")
+        if not values or len(values) < 2:
+            st.error("Лист пустой или содержит недостаточно данных для обработки")
+            df = None
         else:
-            styled_html = """
+            df = pd.DataFrame(values[1:], columns=values[0])
+
+        if df is not None and not df.empty:
+            st.markdown("### 🔍 Фильтры")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                selected_resp = st.selectbox("👤 Ответственный", ["Все"] + sorted(df["Ответственный"].dropna().unique()))
+            with col2:
+                selected_type = st.selectbox("📄 Тип договора", ["Все"] + sorted(df["Тип договора"].dropna().unique()))
+
+            filtered_df = df.copy()
+            if selected_resp != "Все":
+                filtered_df = filtered_df[filtered_df["Ответственный"] == selected_resp]
+            if selected_type != "Все":
+                filtered_df = filtered_df[filtered_df["Тип договора"] == selected_type]
+
+            if filtered_df.empty:
+                st.info("Нет подходящих записей.")
+            else:
+                styled_html = """
 <style>
     table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
     th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #ddd; font-size: 15px; }
@@ -261,31 +261,29 @@ elif st.session_state['page'] == 'unpaid_registry':
     a:hover { text-decoration: underline; }
 </style>
 """
-            table_html = "<table><thead><tr>"
-            for col in filtered_df.columns:
-                table_html += f"<th>{col}</th>"
-            table_html += "</tr></thead><tbody>"
-
-            for _, row in filtered_df.iterrows():
-                table_html += "<tr>"
+                table_html = "<table><thead><tr>"
                 for col in filtered_df.columns:
-                    val = row[col]
-                    if isinstance(val, str) and val.startswith("http"):
-                        val = f'<a href="{val}" target="_blank">Открыть сделку</a>'
-                    table_html += f"<td>{val}</td>"
-                table_html += "</tr>"
+                    table_html += f"<th>{col}</th>"
+                table_html += "</tr></thead><tbody>"
 
-            table_html += "</tbody></table>"
-            st.markdown(styled_html + table_html, unsafe_allow_html=True)
+                for _, row in filtered_df.iterrows():
+                    table_html += "<tr>"
+                    for col in filtered_df.columns:
+                        val = row[col]
+                        if isinstance(val, str) and val.startswith("http"):
+                            val = f'<a href="{val}" target="_blank">Открыть сделку</a>'
+                        table_html += f"<td>{val}</td>"
+                    table_html += "</tr>"
+
+                table_html += "</tbody></table>"
+                st.markdown(styled_html + table_html, unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"❌ Не удалось загрузить таблицу: {e}")
 
     if st.button("🔙 Назад в меню"):
         st.session_state['page'] = 'main_menu'
-        st.experimental_rerun()
 
-# === ЭКРАН СКАЧИВАНИЯ ===
 elif st.session_state['page'] == 'document_download':
     st.title("✅ Документы успешно созданы")
     st.success("Документы загружены на Google Диск и готовы к скачиванию:")
@@ -298,4 +296,3 @@ elif st.session_state['page'] == 'document_download':
         st.session_state['page'] = 'main_menu'
         st.session_state['form_data'] = {}
         st.session_state['generated_files'] = []
-        st.experimental_rerun()
