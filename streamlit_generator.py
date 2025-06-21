@@ -10,6 +10,20 @@ TEMPLATE_DIR = "templates"
 OUTPUT_DIR = "output"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+# --- Простой ввод пароля с хранением в сессии ---
+if 'authenticated' not in st.session_state:
+    st.session_state['authenticated'] = False
+
+if not st.session_state['authenticated']:
+    password = st.text_input("Введите пароль", type="password")
+    if st.button("Войти"):
+        if password == "leads123":  # <-- поменяй пароль здесь
+            st.session_state['authenticated'] = True
+            st.experimental_rerun()
+        else:
+            st.error("Неверный пароль")
+
+    st.stop()  # Прекращаем рендеринг, пока не авторизован
 
 # === ИНИЦИАЛИЗАЦИЯ СЕССИИ ===
 if 'page' not in st.session_state:
