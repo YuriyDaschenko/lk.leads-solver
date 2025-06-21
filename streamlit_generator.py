@@ -1,5 +1,6 @@
 import os
 import streamlit as st
+import json
 from google.oauth2.service_account import Credentials
 
 # === НАСТРОЙКИ ПАПОК ===
@@ -24,12 +25,12 @@ if st.session_state['page'] == 'main_menu':
     with col1:
         if st.button("📄 Подготовить документы клиенту"):
             st.session_state['page'] = 'select_parameters'
-            st.rerun()
+            st.experimental_rerun()
 
     with col2:
         if st.button("📋 Реестр неоплаченных счетов"):
             st.session_state['page'] = 'unpaid_registry'
-            st.rerun()
+            st.experimental_rerun()
 
 # === ЭКРАН ВЫБОРА ПАРАМЕТРОВ ДОКУМЕНТА ===
 elif st.session_state['page'] == 'select_parameters':
@@ -53,18 +54,22 @@ elif st.session_state['page'] == 'select_parameters':
         if submitted:
             st.session_state['combo'] = (our_company, payer_type, service_type, doc_type)
             st.session_state['page'] = 'fill_fields_placeholder'
-            st.rerun()
+            st.experimental_rerun()
 
     if st.button("🔙 Назад в меню"):
         st.session_state['page'] = 'main_menu'
-        st.rerun()
+        st.experimental_rerun()
 
 # === ЭКРАН ЗАПОЛНЕНИЯ ПОЛЕЙ ===
 elif st.session_state['page'] == 'fill_fields_placeholder':
     import re
     from docx import Document
     from datetime import datetime
-    import json
+    from docxtpl import DocxTemplate
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaFileUpload
+    from num2words import num2words
+    import gspread
 
     def extract_ordered_variables_from_docx(doc_path):
         doc = Document(doc_path)
@@ -141,17 +146,13 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
                 st.success("✅ Данные сохранены.")
 
                 try:
-                    import gspread
-                    from google.oauth2.service_account import Credentials
-                    from docxtpl import DocxTemplate
-                    from googleapiclient.discovery import build
-                    from googleapiclient.http import MediaFileUpload
-                    from num2words import num2words
-
                     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-                    service_account_info = st.secrets["gcp_service_account"].copy()
+
+                    secret_json = st.secrets["gcp_service_account"]["json"]
+                    service_account_info = json.loads(secret_json)
                     service_account_info["***REMOVED***"] = service_account_info["***REMOVED***"].replace('\\n', '\n')
                     credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
+
                     client = gspread.authorize(credentials)
                     sh = client.open_by_url("https://docs.google.com/spreadsheets/d/1AeW7yFTp2KIVPoDoGgouvLRNkf80pLIyz-I9gIeQKL4/edit")
                     worksheet = sh.sheet1
@@ -168,9 +169,9 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
                     worksheet.append_row(row)
 
                     def upload_to_gdrive(filepath, filename):
-                        drive_service_account_info = st.secrets["gcp_service_account"].copy()
-                        drive_service_account_info["***REMOVED***"] = drive_service_account_info["***REMOVED***"].replace('\\n', '\n')
-                        drive_credentials = Credentials.from_service_account_info(drive_service_account_info, scopes=["https://www.googleapis.com/auth/drive"])
+                        drive_scopes = ["https://www.googleapis.com/auth/drive"]
+                        drive_service_account_info = service_account_info.copy()
+                        drive_credentials = Credentials.from_service_account_info(drive_service_account_info, scopes=drive_scopes)
                         drive_service = build("drive", "v3", credentials=drive_credentials)
                         file_metadata = {"name": filename, "parents": ["1z-b3pc71PMxjeU9tgwmIgjIKYLUYaEPM"]}
                         media = MediaFileUpload(filepath, resumable=True)
@@ -204,14 +205,14 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
                         st.session_state['generated_files'].append((filename, full_path))
 
                     st.session_state['page'] = 'document_download'
-                    st.rerun()
+                    st.experimental_rerun()
 
                 except Exception as e:
                     st.error(f"⚠️ Ошибка при записи в Google Sheets: {e}")
 
         if st.button("🔙 Назад"):
             st.session_state['page'] = 'select_parameters'
-            st.rerun()
+            st.experimental_rerun()
 
 # === Реестр неоплаченных счетов ===
 elif st.session_state['page'] == 'unpaid_registry':
@@ -220,10 +221,10 @@ elif st.session_state['page'] == 'unpaid_registry':
     try:
         import gspread
         import pandas as pd
-        from google.oauth2.service_account import Credentials
 
         scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-        service_account_info = st.secrets["gcp_service_account"].copy()
+        secret_json = st.secrets["gcp_service_account"]["json"]
+        service_account_info = json.loads(secret_json)
         service_account_info["***REMOVED***"] = service_account_info["***REMOVED***"].replace('\\n', '\n')
         credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
         client = gspread.authorize(credentials)
@@ -282,7 +283,7 @@ elif st.session_state['page'] == 'unpaid_registry':
 
     if st.button("🔙 Назад в меню"):
         st.session_state['page'] = 'main_menu'
-        st.rerun()
+        st.experimental_rerun()
 
 # === ЭКРАН СКАЧИВАНИЯ ===
 elif st.session_state['page'] == 'document_download':
@@ -297,4 +298,4 @@ elif st.session_state['page'] == 'document_download':
         st.session_state['page'] = 'main_menu'
         st.session_state['form_data'] = {}
         st.session_state['generated_files'] = []
-        st.rerun()
+        st.experimental_rerun()
