@@ -1,4 +1,3 @@
-import json
 import os
 import streamlit as st
 from google.oauth2.service_account import Credentials
@@ -60,12 +59,12 @@ elif st.session_state['page'] == 'select_parameters':
         st.session_state['page'] = 'main_menu'
         st.rerun()
 
-
+# === ЭКРАН ЗАПОЛНЕНИЯ ПОЛЕЙ ===
 elif st.session_state['page'] == 'fill_fields_placeholder':
-    import json
     import re
     from docx import Document
     from datetime import datetime
+    import json
 
     def extract_ordered_variables_from_docx(doc_path):
         doc = Document(doc_path)
@@ -114,7 +113,7 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
         for template_file in selected_entry['template_paths']:
             path = os.path.join(TEMPLATE_DIR, template_file)
             if not os.path.exists(path):
-                st.warning(f"⚠️ Файл не найден: {{template_file}}")
+                st.warning(f"⚠️ Файл не найден: {template_file}")
             else:
                 vars_from_template = extract_ordered_variables_from_docx(path)
                 for var in vars_from_template:
@@ -144,9 +143,13 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
                 try:
                     import gspread
                     from google.oauth2.service_account import Credentials
+                    from docxtpl import DocxTemplate
+                    from googleapiclient.discovery import build
+                    from googleapiclient.http import MediaFileUpload
+                    from num2words import num2words
 
                     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-                    service_account_info = st.secrets["gcp_service_account"]
+                    service_account_info = st.secrets["gcp_service_account"]  # уже dict, без json.loads()
                     credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
                     gc = gspread.authorize(credentials)
                     sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/1AeW7yFTp2KIVPoDoGgouvLRNkf80pLIyz-I9gIeQKL4/edit")
@@ -162,11 +165,6 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
                         input_values.get("payer_fio", "") or input_values.get("client_short_name", "")
                     ]
                     worksheet.append_row(row)
-
-                    from docxtpl import DocxTemplate
-                    from googleapiclient.discovery import build
-                    from googleapiclient.http import MediaFileUpload
-                    from num2words import num2words
 
                     def upload_to_gdrive(filepath, filename):
                         drive_service_account_info = st.secrets["gcp_service_account"]
@@ -283,6 +281,7 @@ elif st.session_state['page'] == 'unpaid_registry':
         st.session_state['page'] = 'main_menu'
         st.rerun()
 
+# === ЭКРАН СКАЧИВАНИЯ ===
 elif st.session_state['page'] == 'document_download':
     st.title("✅ Документы успешно созданы")
     st.success("Документы загружены на Google Диск и готовы к скачиванию:")
