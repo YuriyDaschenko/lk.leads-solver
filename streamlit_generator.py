@@ -149,10 +149,11 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
                     from num2words import num2words
 
                     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-                    service_account_info = st.secrets["gcp_service_account"]  # уже dict, без json.loads()
+                    service_account_info = st.secrets["gcp_service_account"].copy()
+                    service_account_info["***REMOVED***"] = service_account_info["***REMOVED***"].replace('\\n', '\n')
                     credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
-                    gc = gspread.authorize(credentials)
-                    sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/1AeW7yFTp2KIVPoDoGgouvLRNkf80pLIyz-I9gIeQKL4/edit")
+                    client = gspread.authorize(credentials)
+                    sh = client.open_by_url("https://docs.google.com/spreadsheets/d/1AeW7yFTp2KIVPoDoGgouvLRNkf80pLIyz-I9gIeQKL4/edit")
                     worksheet = sh.sheet1
 
                     row = [
@@ -167,7 +168,8 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
                     worksheet.append_row(row)
 
                     def upload_to_gdrive(filepath, filename):
-                        drive_service_account_info = st.secrets["gcp_service_account"]
+                        drive_service_account_info = st.secrets["gcp_service_account"].copy()
+                        drive_service_account_info["***REMOVED***"] = drive_service_account_info["***REMOVED***"].replace('\\n', '\n')
                         drive_credentials = Credentials.from_service_account_info(drive_service_account_info, scopes=["https://www.googleapis.com/auth/drive"])
                         drive_service = build("drive", "v3", credentials=drive_credentials)
                         file_metadata = {"name": filename, "parents": ["1z-b3pc71PMxjeU9tgwmIgjIKYLUYaEPM"]}
@@ -221,7 +223,8 @@ elif st.session_state['page'] == 'unpaid_registry':
         from google.oauth2.service_account import Credentials
 
         scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-        service_account_info = st.secrets["gcp_service_account"]
+        service_account_info = st.secrets["gcp_service_account"].copy()
+        service_account_info["***REMOVED***"] = service_account_info["***REMOVED***"].replace('\\n', '\n')
         credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
         client = gspread.authorize(credentials)
 
