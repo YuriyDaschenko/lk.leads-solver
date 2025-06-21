@@ -3,6 +3,8 @@ import streamlit as st
 import json
 from google.oauth2.service_account import Credentials
 
+st.set_page_config(page_title="CRM генератор", layout="centered")
+
 # === НАСТРОЙКИ ПАПОК ===
 TEMPLATE_DIR = "templates"
 OUTPUT_DIR = "output"
@@ -14,9 +16,7 @@ if 'page' not in st.session_state:
 if 'form_data' not in st.session_state:
     st.session_state['form_data'] = {}
 
-# === ГЛАВНОЕ МЕНЮ ===
 if st.session_state['page'] == 'main_menu':
-    st.set_page_config(page_title="CRM генератор", layout="centered")
     st.title("👋 Добро пожаловать в Личный кабинет менеджера Leads-Solver")
 
     st.subheader("Выберите действие:")
