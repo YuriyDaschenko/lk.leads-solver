@@ -18,11 +18,12 @@ if not st.session_state['authenticated']:
     if st.button("Войти"):
         if password == "leads123":
             st.session_state['authenticated'] = True
-            st.experimental_rerun()  # <- тут надо убрать
+            # НЕ ВЫЗЫВАЙТЕ st.experimental_rerun()
+            # просто прервите выполнение страницы, дальше на следующем рендере авторизация уже True
         else:
             st.error("Неверный пароль")
 
-    st.stop()  # останавливаем рендер, чтобы страница не шла дальше
+    st.stop()
 
 # === ИНИЦИАЛИЗАЦИЯ СЕССИИ ===
 if 'page' not in st.session_state:
