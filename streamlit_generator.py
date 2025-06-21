@@ -1,5 +1,7 @@
-import streamlit as st
+import json
 import os
+import streamlit as st
+from google.oauth2.service_account import Credentials
 
 # === НАСТРОЙКИ ПАПОК ===
 TEMPLATE_DIR = "templates"
@@ -144,7 +146,8 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
                     from google.oauth2.service_account import Credentials
 
                     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-                    credentials = Credentials.from_service_account_file("источники.json", scopes=scopes)
+                    service_account_info = st.secrets["gcp_service_account"]
+                    credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
                     gc = gspread.authorize(credentials)
                     sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/1AeW7yFTp2KIVPoDoGgouvLRNkf80pLIyz-I9gIeQKL4/edit")
                     worksheet = sh.sheet1
@@ -166,7 +169,8 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
                     from num2words import num2words
 
                     def upload_to_gdrive(filepath, filename):
-                        drive_credentials = Credentials.from_service_account_file("источники.json", scopes=["https://www.googleapis.com/auth/drive"])
+                        drive_service_account_info = st.secrets["gcp_service_account"]
+                        drive_credentials = Credentials.from_service_account_info(drive_service_account_info, scopes=["https://www.googleapis.com/auth/drive"])
                         drive_service = build("drive", "v3", credentials=drive_credentials)
                         file_metadata = {"name": filename, "parents": ["1z-b3pc71PMxjeU9tgwmIgjIKYLUYaEPM"]}
                         media = MediaFileUpload(filepath, resumable=True)
@@ -219,7 +223,8 @@ elif st.session_state['page'] == 'unpaid_registry':
         from google.oauth2.service_account import Credentials
 
         scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-        credentials = Credentials.from_service_account_file("источники.json", scopes=scopes)
+        service_account_info = st.secrets["gcp_service_account"]
+        credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
         client = gspread.authorize(credentials)
 
         spreadsheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1AeW7yFTp2KIVPoDoGgouvLRNkf80pLIyz-I9gIeQKL4/edit")
