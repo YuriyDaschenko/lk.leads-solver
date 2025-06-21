@@ -6,3 +6,5 @@ google-auth
 docxtpl
 python-docx
 openpyxl
+num2words
+google-api-python-client
