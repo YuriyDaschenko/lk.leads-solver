@@ -1,21 +1,7 @@
 import os
 import streamlit as st
-import random
-import time
 import json
-import gspread
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait, Select
-from selenium.webdriver.support import expected_conditions as EC
 from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
-import pandas as pd
-from docx import Document
-from docxtpl import DocxTemplate
-from datetime import datetime
-from num2words import num2words
 
 st.set_page_config(page_title="CRM генератор", layout="centered")
 
@@ -47,8 +33,9 @@ if 'form_data' not in st.session_state:
 
 if st.session_state['page'] == 'main_menu':
     st.title("👋 Добро пожаловать в Личный кабинет менеджера Leads-Solver")
+
     st.subheader("Выберите действие:")
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
 
     with col1:
         if st.button("📄 Подготовить документы клиенту"):
@@ -58,130 +45,12 @@ if st.session_state['page'] == 'main_menu':
         if st.button("📋 Реестр неоплаченных счетов"):
             st.session_state['page'] = 'unpaid_registry'
 
-    with col3:
-        if st.button("🚀 Запуск клиента с оплатой за Лида"):
-            st.session_state['page'] = 'create_lk_vr_step1'
-
-# === БЛОК СОЗДАНИЯ ЛК ===
-elif st.session_state['page'] == 'create_lk_vr_step1':
-    st.title("🚀 Запуск клиента с оплатой за Лида")
-    lk_vr = st.text_input("Введите логин для ЛК ВР")
-    if st.button("Создать ЛК ВР") and lk_vr:
-        st.session_state['lk_vr'] = lk_vr
-        with st.spinner("Создание ЛК ВР..."):
-            try:
-                with open("user_agents.txt", encoding="utf-8") as f:
-                    user_agents = [line.strip() for line in f if line.strip()]
-                random_user_agent = random.choice(user_agents)
-
-                options = webdriver.ChromeOptions()
-                options.add_argument("--headless")
-                options.add_argument("--disable-gpu")
-                options.add_argument("--window-size=1920,1080")
-                options.add_argument("--no-sandbox")
-                options.add_argument(f"user-agent={random_user_agent}")
-                driver = webdriver.Chrome(options=options)
-                wait = WebDriverWait(driver, 20)
-
-                crm_login = st.secrets["crm"]["username"]
-                crm_password = st.secrets["crm"]["password"]
-
-                driver.get("https://crm.leads-solver.ru/")
-                wait.until(EC.presence_of_element_located((By.ID, "loginform-username"))).send_keys(crm_login)
-                driver.find_element(By.ID, "loginform-password").send_keys(crm_password)
-                driver.find_element(By.NAME, "login-button").click()
-
-                time.sleep(30)
-
-                driver.execute_script("""
-                    let popups = document.querySelectorAll('[class*="popup"], [id*="popup"], .modal-backdrop, .fade.in, .swal2-container');
-                    popups.forEach(el => el.remove());
-                """)
-
-                wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'a[href*="/admin/user/create"]'))).click()
-                time.sleep(20)
-                driver.execute_script("""
-                    let popups = document.querySelectorAll('[class*="popup"], [id*="popup"], .modal-backdrop, .fade.in, .swal2-container');
-                    popups.forEach(el => el.remove());
-                """)
-
-                fields = {
-                    "user-username": lk_vr,
-                    "user-password_change": lk_vr,
-                    "user-email": f"{lk_vr}@mail.ru",
-                    "user-name": "Юрий"
-                }
-
-                for field_id, value in fields.items():
-                    elem = wait.until(EC.element_to_be_clickable((By.ID, field_id)))
-                    elem.clear()
-                    elem.send_keys(value)
-
-                Select(wait.until(EC.element_to_be_clickable((By.ID, "user-role_id")))).select_by_visible_text("Клиент")
-                Select(wait.until(EC.element_to_be_clickable((By.ID, "user-type_id")))).select_by_visible_text("ГЦК")
-                wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#create-user-form button[type="submit"]'))).click()
-                time.sleep(3)
-
-                st.success("✅ Личный кабинет создан")
-                driver.quit()
-                st.session_state['page'] = 'create_lk_vr_step2'
-
-            except Exception as e:
-                st.error(f"Ошибка: {e}")
-                driver.quit()
-
-elif st.session_state['page'] == 'create_lk_vr_step2':
-    st.title("📋 Заполните данные проекта")
-    project_name = st.text_input("Название проекта")
-    bitrix_deal = st.text_input("Ссылка на сделку Битрикс")
-    client_script = st.text_input("Ссылка на скрипт клиента")
-    bitrix_integration = st.text_input("Интеграция с Битрикс")
-    operator_id = st.text_input("Уникальный идентификатор для операторов связи")
-    lead_cost = st.text_input("Стоимость Лида")
-
-    if st.button("Продолжить"):
-        try:
-            creds = Credentials.from_service_account_file("источники.json", scopes=[
-                "https://www.googleapis.com/auth/drive",
-                "https://www.googleapis.com/auth/spreadsheets"
-            ])
-            client = gspread.authorize(creds)
-            service_drive = build("drive", "v3", credentials=creds)
-            spreadsheet = client.open_by_key("1LeqdtAsWkvLYohY3Vo0gPQT_Y42L4PjqZhd3A37jMlc")
-
-            copied_file = service_drive.files().copy(
-                fileId="1klgq7DezuuuhEoKMjmXoAnMVOOd4wXZpx3x-SvGaiy8",
-                body={"name": project_name, "parents": ["1r0hb_Xx6jpuiJvEY2sa5YWAbbAHqvteD"]}
-            ).execute()
-
-            client_sheet_link = f"https://docs.google.com/spreadsheets/d/{copied_file['id']}"
-
-            template_sheet = spreadsheet.worksheet("Шаблон ЛК клиента")
-            new_sheet = template_sheet.duplicate(new_sheet_name=project_name)
-            spreadsheet.reorder_worksheets(spreadsheet.worksheets() + [new_sheet])
-
-            new_sheet.update_acell("B1", project_name)
-            new_sheet.update_acell("B2", st.session_state['lk_vr'])
-            new_sheet.update_acell("B3", client_sheet_link)
-            new_sheet.update_acell("B4", bitrix_deal)
-            new_sheet.update_acell("B5", client_script)
-            new_sheet.update_acell("B6", bitrix_integration)
-            new_sheet.update_acell("B7", operator_id)
-            new_sheet.update_acell("B9", lead_cost)
-
-            st.success("✅ Проект создан")
-            st.markdown(f"📄 [Перейти к таблице клиента]({client_sheet_link})")
-            st.session_state['page'] = 'main_menu'
-
-        except Exception as e:
-            st.error(f"Ошибка при создании таблицы: {e}")
-
 elif st.session_state['page'] == 'select_parameters':
     st.title("📄 Подготовка документов клиенту")
 
     with st.form("doc_parameters_form"):
         our_company = st.selectbox("📌 От какого юрлица готовится документ?", ["ООО Клиентология", "ИП Матвейчук С.Р."])
-        payer_type = st.selectbox("👤 Кто плательщик?", ["ООО", "ИП", "Физическое лицо"])
+        payer_type = st.selectbox("👤 Кто плательщик?", ["ООО", "ИП", "Физлицо"])
         service_type = st.selectbox("💼 Тип услуги:", [
             "Оплата за номера",
             "Номера с КЦ без гарантии",
