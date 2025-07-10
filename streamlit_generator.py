@@ -186,10 +186,10 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
                             )
                             drive_service = build("drive", "v3", credentials=drive_credentials)
 
-                            # Создание файла в указанной папке
+                            # Создание файла в общем диске
                             file_metadata = {
                                 "name": filename,
-                                "parents": ["0AKiune4_dCQUUk9PVA"]  # ID папки в твоём Google Диске
+                                "parents": ["0AKiune4_dCQUUk9PVA"]  # ID твоего Shared Drive
                             }
                             media = MediaFileUpload(filepath, resumable=True)
                             created_file = drive_service.files().create(
@@ -199,19 +199,6 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
                                 supportsAllDrives=True
                             ).execute()
                             file_id = created_file["id"]
-
-                            # Передача прав владельца
-                            drive_service.permissions().create(
-                                fileId=file_id,
-                                body={
-                                    "type": "user",
-                                    "role": "owner",
-                                    "emailAddress": "info@leads-solver.ru"
-                                },
-                                transferOwnership=True,
-                                supportsAllDrives=True
-                            ).execute()
-
 
                         st.session_state['generated_files'] = []
 
