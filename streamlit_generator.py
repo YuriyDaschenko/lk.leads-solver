@@ -189,13 +189,14 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
                             # Создание файла в указанной папке
                             file_metadata = {
                                 "name": filename,
-                                "parents": ["1z-b3pc71PMxjeU9tgwmIgjIKYLUYaEPM"]  # ID папки в твоём Google Диске
+                                "parents": ["0AKiune4_dCQUUk9PVA"]  # ID папки в твоём Google Диске
                             }
                             media = MediaFileUpload(filepath, resumable=True)
                             created_file = drive_service.files().create(
                                 body=file_metadata,
                                 media_body=media,
                                 fields="id"
+                                supportsAllDrives=True
                             ).execute()
                             file_id = created_file["id"]
 
@@ -207,7 +208,8 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
                                     "role": "owner",
                                     "emailAddress": "info@leads-solver.ru"
                                 },
-                                transferOwnership=True
+                                transferOwnership=True,
+                                supportsAllDrives=True
                             ).execute()
 
 
