@@ -181,11 +181,35 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
                         def upload_to_gdrive(filepath, filename):
                             drive_scopes = ["https://www.googleapis.com/auth/drive"]
                             drive_service_account_info = service_account_info.copy()
-                            drive_credentials = Credentials.from_service_account_info(drive_service_account_info, scopes=drive_scopes)
+                            drive_credentials = Credentials.from_service_account_info(
+                                drive_service_account_info, scopes=drive_scopes
+                            )
                             drive_service = build("drive", "v3", credentials=drive_credentials)
-                            file_metadata = {"name": filename, "parents": ["1z-b3pc71PMxjeU9tgwmIgjIKYLUYaEPM"]}
+
+                            # Создание файла в указанной папке
+                            file_metadata = {
+                                "name": filename,
+                                "parents": ["1z-b3pc71PMxjeU9tgwmIgjIKYLUYaEPM"]  # ID папки в твоём Google Диске
+                            }
                             media = MediaFileUpload(filepath, resumable=True)
-                            drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+                            created_file = drive_service.files().create(
+                                body=file_metadata,
+                                media_body=media,
+                                fields="id"
+                            ).execute()
+                            file_id = created_file["id"]
+
+                            # Передача прав владельца
+                            drive_service.permissions().create(
+                                fileId=file_id,
+                                body={
+                                    "type": "user",
+                                    "role": "owner",
+                                    "emailAddress": "info@leads-solver.ru"
+                                },
+                                transferOwnership=True
+                            ).execute()
+
 
                         st.session_state['generated_files'] = []
 
@@ -211,6 +235,7 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
                             filename = f"{prefix}-{postfix}.docx"
                             full_path = os.path.join(OUTPUT_DIR, filename)
                             doc.save(full_path)
+
                             upload_to_gdrive(full_path, filename)
                             st.session_state['generated_files'].append((filename, full_path))
 
