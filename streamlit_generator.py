@@ -195,7 +195,7 @@ elif st.session_state['page'] == 'fill_fields_placeholder':
                             created_file = drive_service.files().create(
                                 body=file_metadata,
                                 media_body=media,
-                                fields="id"
+                                fields="id",
                                 supportsAllDrives=True
                             ).execute()
                             file_id = created_file["id"]
